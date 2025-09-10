@@ -6,20 +6,20 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 215 25% 27%;
+    --background: 0 0% 98%;
+    --foreground: 0 0% 18%;
 
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 27%;
+    --card-foreground: 0 0% 18%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 27%;
+    --popover-foreground: 0 0% 18%;
 
-    /* Professional Real Estate Blue */
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 98%;
-    --primary-light: 217 91% 75%;
-    --primary-dark: 217 91% 45%;
+    /* EY Primary Yellow */
+    --primary: 56 100% 50%;
+    --primary-foreground: 0 0% 0%;
+    --primary-light: 56 100% 65%;
+    --primary-dark: 56 100% 35%;
 
     /* Success Green for Completed Steps */
     --success: 142 76% 36%;
@@ -35,21 +35,21 @@
     --error: 0 84% 60%;
     --error-foreground: 0 0% 98%;
 
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 215 25% 27%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 18%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
 
-    --accent: 151 55% 42%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 0 0% 18%;
+    --accent-foreground: 56 100% 50%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 217 91% 60%;
+    --border: 0 0% 91%;
+    --input: 0 0% 91%;
+    --ring: 56 100% 50%;
 
     --radius: 0.75rem;
 
