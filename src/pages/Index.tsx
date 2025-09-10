@@ -1,14 +1,58 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import { Dashboard } from './Dashboard';
+import { NewLeaseRequest } from './NewLeaseRequest';
+import { LeaseRequestDetails } from './LeaseRequestDetails';
+
+type AppView = 'dashboard' | 'new-request' | 'request-details';
 
 const Index = () => {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
-  );
+  const [currentView, setCurrentView] = useState<AppView>('dashboard');
+  const [selectedRequestId, setSelectedRequestId] = useState<string>('');
+
+  const handleCreateNew = () => {
+    setCurrentView('new-request');
+  };
+
+  const handleViewRequest = (id: string) => {
+    setSelectedRequestId(id);
+    setCurrentView('request-details');
+  };
+
+  const handleBack = () => {
+    setCurrentView('dashboard');
+    setSelectedRequestId('');
+  };
+
+  const handleSubmitSuccess = (requestId: string) => {
+    setSelectedRequestId(requestId);
+    setCurrentView('request-details');
+  };
+
+  switch (currentView) {
+    case 'new-request':
+      return (
+        <NewLeaseRequest 
+          onBack={handleBack}
+          onSubmitSuccess={handleSubmitSuccess}
+        />
+      );
+    
+    case 'request-details':
+      return (
+        <LeaseRequestDetails 
+          requestId={selectedRequestId}
+          onBack={handleBack}
+        />
+      );
+    
+    default:
+      return (
+        <Dashboard 
+          onCreateNew={handleCreateNew}
+          onViewRequest={handleViewRequest}
+        />
+      );
+  }
 };
 
 export default Index;
