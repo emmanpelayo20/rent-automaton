@@ -84,7 +84,8 @@ export const WorkflowProgress = ({ steps, currentStep }: WorkflowProgressProps) 
                     step.status === 'failed' ? 'text-error' :
                     'text-muted-foreground'
                   )}>
-                    {step.step}. {step.name}
+                    {/* {step.step}. {step.name} */}
+                    {step.name}
                   </h3>
                   
                   {step.requiresReview && (
@@ -99,12 +100,12 @@ export const WorkflowProgress = ({ steps, currentStep }: WorkflowProgressProps) 
                 {/* Step Details */}
                 <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                   {step.startedAt && (
-                    <span>Started: {step.startedAt.toLocaleTimeString()}</span>
+                    <span>Started: {step.startedAt.toString()}</span>
                   )}
                   {step.completedAt && (
-                    <span>Completed: {step.completedAt.toLocaleTimeString()}</span>
+                    <span>Completed: {step.completedAt.toString()}</span>
                   )}
-                  {step.confidenceScore && (
+                  {/* {step.confidenceScore && (
                     <span className={cn(
                       "px-2 py-1 rounded",
                       step.confidenceScore >= 0.8 ? 'bg-success/20 text-success' :
@@ -113,7 +114,7 @@ export const WorkflowProgress = ({ steps, currentStep }: WorkflowProgressProps) 
                     )}>
                       Confidence: {Math.round(step.confidenceScore * 100)}%
                     </span>
-                  )}
+                  )} */}
                 </div>
                 
                 {step.notes && (

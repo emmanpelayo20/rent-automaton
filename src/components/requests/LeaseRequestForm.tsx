@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -14,7 +14,8 @@ import { DocumentUpload } from '@/components/documents/DocumentUpload';
 import { CalendarIcon, Building, Users, FileText, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { sampleProperties } from '@/lib/sampleData';
+import { fetchAllProperties } from '@/services/leaseRequestService';
+import { Property } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
 const leaseRequestSchema = z.object({
@@ -25,9 +26,7 @@ const leaseRequestSchema = z.object({
   contactEmail: z.string().email('Valid email is required'),
   contactPhone: z.string().min(10, 'Valid phone number is required'),
   leaseTerm: z.number().min(1, 'Lease term must be at least 1 month'),
-  commencementDate: z.date({
-    required_error: 'Commencement date is required',
-  }),
+  commencementDate: z.string().optional(),
   rentAmount: z.number().min(1, 'Rent amount must be greater than 0'),
   securityDeposit: z.number().min(0, 'Security deposit must be 0 or greater'),
   specialConditions: z.string().optional(),
@@ -43,7 +42,26 @@ interface LeaseRequestFormProps {
 export const LeaseRequestForm = ({ onSubmit, onCancel }: LeaseRequestFormProps) => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [commencementDate, setCommencementDate] = useState<Date>();
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [isLoadingProperties, setIsLoadingProperties] = useState(true);
   const { toast } = useToast();
+
+  // Load properties from PostgreSQL on component mount
+  useEffect(() => {
+    const loadProperties = async () => {
+      try {
+        setIsLoadingProperties(true);
+        const fetchedProperties = await fetchAllProperties();
+        setProperties(fetchedProperties);
+      } catch (error) {
+        console.error('Failed to load properties:', error);
+      } finally {
+        setIsLoadingProperties(false);
+      }
+    };
+
+    loadProperties();
+  }, []);
 
   const {
     register,
@@ -56,10 +74,15 @@ export const LeaseRequestForm = ({ onSubmit, onCancel }: LeaseRequestFormProps) 
   });
 
   const propertyId = watch('propertyId');
-  const selectedProperty = sampleProperties.find(p => p.id === propertyId);
+  const selectedProperty = properties.find(p => p.id === propertyId);
 
   const handleFormSubmit = async (data: LeaseRequestForm) => {
+    console.log('Form submit handler called with:', data);
+    console.log('Commencement date:', commencementDate);
+    console.log('Documents:', documents);
+    
     if (!commencementDate) {
+      console.log('Validation failed: No commencement date');
       toast({
         title: "Error",
         description: "Please select a commencement date",
@@ -69,6 +92,7 @@ export const LeaseRequestForm = ({ onSubmit, onCancel }: LeaseRequestFormProps) 
     }
 
     if (documents.length === 0) {
+      console.log('Validation failed: No documents uploaded');
       toast({
         title: "Error",
         description: "Please upload at least one document",
@@ -77,11 +101,20 @@ export const LeaseRequestForm = ({ onSubmit, onCancel }: LeaseRequestFormProps) 
       return;
     }
 
+    console.log('Validation passed, calling parent onSubmit');
+
+    // Ensure the date is valid before passing it
+    const validCommencementDate = commencementDate instanceof Date && !isNaN(commencementDate.getTime()) 
+      ? commencementDate 
+      : new Date("2025-09-23");
+
     const formData = {
       ...data,
-      commencementDate,
+      commencementDate: validCommencementDate,
       documents,
     };
+
+    console.log('Final form data being submitted:', formData);
 
     try {
       await onSubmit(formData);
@@ -90,6 +123,7 @@ export const LeaseRequestForm = ({ onSubmit, onCancel }: LeaseRequestFormProps) 
         description: "Lease request submitted successfully",
       });
     } catch (error) {
+      console.error('Form submission error:', error);
       toast({
         title: "Error",
         description: "Failed to submit lease request",
@@ -116,8 +150,17 @@ export const LeaseRequestForm = ({ onSubmit, onCancel }: LeaseRequestFormProps) 
     return value;
   };
 
+  const onSubmitWrapper = (data: LeaseRequestForm) => {
+    console.log('onSubmitWrapper called - form is valid');
+    handleFormSubmit(data);
+  };
+
+  const onInvalidSubmit = (errors: any) => {
+    console.log('Form validation failed:', errors);
+  };
+
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-8">
+    <form onSubmit={handleSubmit(onSubmitWrapper, onInvalidSubmit)} className="space-y-8">
       {/* Property Selection */}
       <Card>
         <CardHeader>
@@ -134,16 +177,20 @@ export const LeaseRequestForm = ({ onSubmit, onCancel }: LeaseRequestFormProps) 
                 <SelectValue placeholder="Select a property" />
               </SelectTrigger>
               <SelectContent>
-                {sampleProperties.map((property) => (
-                  <SelectItem key={property.id} value={property.id}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{property.address}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {property.unitNumber} • {property.propertyType} • {property.availableArea}m²
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {isLoadingProperties ? (
+                  <SelectItem value="loading" disabled>Loading properties...</SelectItem>
+                ) : (
+                  properties.map((property) => (
+                    <SelectItem key={property.id} value={property.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{property.address}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {property.unitNumber} • {property.propertyType} • {property.availableArea}m²
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
             {errors.propertyId && (

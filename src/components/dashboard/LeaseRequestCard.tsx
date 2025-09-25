@@ -13,6 +13,28 @@ interface LeaseRequestCardProps {
 }
 
 export const LeaseRequestCard = ({ request, onViewDetails }: LeaseRequestCardProps) => {
+
+   // Get the latest workflow status from PostgreSQL workflow steps
+  const getLatestWorkflowStatus = () => {
+    if (!request.workflowSteps || request.workflowSteps.length === 0) {
+      return request.status;
+    }
+    
+    // Sort by completedAt or startedAt desc to get the most recent status
+    const sortedSteps = [...request.workflowSteps].sort((a, b) => {
+      const aTime = a.completedAt || a.startedAt;
+      const bTime = b.completedAt || b.startedAt;
+      if (!aTime && !bTime) return 0;
+      if (!aTime) return 1;
+      if (!bTime) return -1;
+      return new Date(bTime).getTime() - new Date(aTime).getTime();
+    });
+    
+    // Find the latest step with "processing" status, or return the most recent step's status
+    const processingStep = sortedSteps.find(step => step.status === 'processing');
+    return processingStep ? processingStep.name : sortedSteps[0]?.name || request.status;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
@@ -21,6 +43,8 @@ export const LeaseRequestCard = ({ request, onViewDetails }: LeaseRequestCardPro
         return 'bg-destructive text-destructive-foreground';
       case 'pending_review':
         return 'bg-warning text-warning-foreground';
+      case 'processing':
+        return 'bg-primary text-primary-foreground';
       default:
         return 'bg-primary text-primary-foreground';
     }
@@ -56,6 +80,8 @@ export const LeaseRequestCard = ({ request, onViewDetails }: LeaseRequestCardPro
         return 'Failed';
       case 'pending_review':
         return 'Requires Review';
+      case 'processing':
+        return 'Processing';
       default:
         return status.replace('_', ' ').toUpperCase();
     }
@@ -96,8 +122,8 @@ export const LeaseRequestCard = ({ request, onViewDetails }: LeaseRequestCardPro
               <span>{request.propertyAddress}</span>
             </div>
           </div>
-          <Badge className={cn("text-xs", getStatusColor(request.status))}>
-            {getStatusText(request.status)}
+          <Badge className={cn("text-xs", getStatusColor(getLatestWorkflowStatus()))}>
+            {getStatusText(getLatestWorkflowStatus())}
           </Badge>
         </div>
       </CardHeader>

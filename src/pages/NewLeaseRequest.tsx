@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, CheckCircle, FileText, User, Building, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { createLeaseRequest } from '@/services/leaseRequestService';
 
 interface NewLeaseRequestProps {
   onBack: () => void;
@@ -19,26 +20,60 @@ export const NewLeaseRequest = ({ onBack, onSubmitSuccess }: NewLeaseRequestProp
     setIsSubmitting(true);
     
     try {
-      // Simulate API call to create lease request
-      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Generate a new request ID
-      const newRequestId = `LR${String(Date.now()).slice(-3)}`;
+      // Create new lease request record in DB
+      const newRequest = await createLeaseRequest({
+        ...data
+      });
       
-      console.log('Lease request submitted:', {
-        id: newRequestId,
-        ...data,
-        status: 'initiated',
-        createdAt: new Date(),
+      //LANGGRAPH START
+      //Generate a new request ID
+      const document_data = data.documents.map((doc: any, index: number) => ({
+              id: `doc_${newRequest.id}_${index}`,
+              file: doc.file, 
+              data: doc.base64,
+              name: doc.name,
+              type: doc.type,
+              mimetype: doc.mimetype,
+          }));
+      
+      const message = {id: newRequest.id, role: "human", content: "Extract the attached documents"};
+
+      console.log('Submitting lease request to API...');
+
+      const response = await fetch('http://localhost:2024/runs/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+        assistant_id: 'agent',
+        input: { 
+          requestid: newRequest.id,
+          messages: [message],
+          documents: document_data,
+        },
+        stream_mode: ['values']
+        }),
       });
 
+      if (!response.ok) {
+        throw new Error(`API call failed with status: ${response.status}`);
+      }
+      
+      //console.log("response");
+      //console.log(response);
+      //const result = await response.json();
+
+      //LANGGRAPH END
+ 
       toast({
         title: "Success!",
-        description: `Lease request ${newRequestId} has been submitted successfully`,
+        description: `Lease request ${newRequest.id} has been submitted successfully`,
       });
 
       // Redirect to the new request details
-      onSubmitSuccess(newRequestId);
+      onSubmitSuccess(newRequest.id);
       
     } catch (error) {
       console.error('Error submitting lease request:', error);

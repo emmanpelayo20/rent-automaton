@@ -284,12 +284,81 @@ export const sampleLeaseRequests: LeaseRequest[] = [
   }
 ];
 
+// Mutable array to store lease requests (allows adding new ones)
+const leaseRequestsStore = [...sampleLeaseRequests];
+
+// Export the mutable store for use in components
+export const getAllLeaseRequests = (): LeaseRequest[] => {
+  return [...leaseRequestsStore];
+};
+
+// Utility functions
 export const getCurrentUserEmail = () => 'sarah.wilson@premiumproperties.com.au';
 
 export const getRequestById = (id: string): LeaseRequest | undefined => {
-  return sampleLeaseRequests.find(req => req.id === id);
+  return leaseRequestsStore.find(request => request.id === id);
 };
 
 export const getPropertyById = (id: string): Property | undefined => {
-  return sampleProperties.find(prop => prop.id === id);
+  return sampleProperties.find(property => property.id === id);
+};
+
+// Function to add a new lease request
+export const addLeaseRequest = (requestData: any): LeaseRequest => {
+  console.log('addLeaseRequest called with:', requestData);
+  
+  const property = getPropertyById(requestData.propertyId);
+  console.log('Found property:', property);
+  
+  try {
+    const newRequest: LeaseRequest = {
+      id: requestData.id,
+      propertyId: requestData.propertyId,
+      propertyAddress: property?.address || 'Unknown Address',
+      tenantName: requestData.tenantName,
+      tenantABN: requestData.tenantABN || '',
+      tenantACN: requestData.tenantACN || '',
+      requestorEmail: requestData.contactEmail,
+      commencementDate: requestData.commencementDate,
+      leaseTerm: requestData.leaseTerm,
+      rentAmount: requestData.rentAmount,
+      securityDeposit: requestData.securityDeposit,
+      status: 'document_extraction' as WorkflowStatus,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      documents: (requestData.documents || []).map((doc: any, index: number) => {
+        console.log(`Processing document ${index}:`, doc);
+        return {
+          id: `doc-${requestData.id}-${index}`,
+          name: doc.fileName || (doc.file ? doc.file.name : `Document ${index + 1}`),
+          type: (doc.type || 'other') as DocumentType,
+          size: doc.file ? doc.file.size : 0,
+          uploadedAt: new Date(),
+          url: `#document-${index}`,
+          extractedData: {},
+          confidenceScore: 0.95
+        };
+      }),
+      workflowSteps: createWorkflowSteps(1, 'document_extraction'),
+      auditTrail: [
+        {
+          id: `audit-${requestData.id}-1`,
+          action: 'Request Submitted',
+          details: `Lease request submitted for ${requestData.tenantName}`,
+          timestamp: new Date(),
+          performedBy: requestData.contactEmail,
+          stepNumber: 1
+        }
+      ]
+    };
+    
+    console.log('Created new request:', newRequest);
+    leaseRequestsStore.push(newRequest);
+    console.log('Added to store. Store now has:', leaseRequestsStore.length, 'requests');
+    
+    return newRequest;
+  } catch (error) {
+    console.error('Error in addLeaseRequest:', error);
+    throw error;
+  }
 };

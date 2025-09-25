@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, File, X, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,9 @@ interface UploadedFile {
   type: DocumentType;
   progress: number;
   id: string;
+  base64: string | null; // Added base64 property
+  name: string;
+  mimetype: string;
 }
 
 interface DocumentUploadProps {
@@ -24,44 +27,95 @@ export const DocumentUpload = ({ onDocumentsChange, maxFiles = 10 }: DocumentUpl
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  // Call onDocumentsChange whenever uploadedFiles changes
+  useEffect(() => {
+    onDocumentsChange(uploadedFiles);
+  }, [uploadedFiles, onDocumentsChange]);
+
+  // Function to convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          // Remove the data URL prefix (e.g., "data:application/pdf;base64,")
+          const base64 = reader.result.split(',')[1];
+          resolve(base64);
+        } else {
+          reject(new Error('Failed to read file'));
+        }
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     setIsUploading(true);
     
     const newFiles: UploadedFile[] = acceptedFiles.map((file, index) => ({
       file,
+      name: file.name,
+      mimetype: file.type,
       type: guessDocumentType(file.name),
       progress: 0,
-      id: `file-${Date.now()}-${index}`
+      id: `file-${Date.now()}-${index}`,
+      base64: null // Initialize as null, will be populated once file is read
     }));
 
-    // Simulate file upload progress
-    newFiles.forEach((uploadFile, index) => {
-      const interval = setInterval(() => {
-        setUploadedFiles(prev => {
-          const updated = prev.map(f => 
-            f.id === uploadFile.id 
-              ? { ...f, progress: Math.min(f.progress + Math.random() * 20, 100) }
-              : f
-          );
-          
-          if (updated.find(f => f.id === uploadFile.id)?.progress === 100) {
-            clearInterval(interval);
-            if (index === newFiles.length - 1) {
-              setIsUploading(false);
-            }
-          }
-          
-          return updated;
-        });
-      }, 200);
-    });
+    // Add files to state immediately
+    setUploadedFiles(prev => [...prev, ...newFiles]);
 
-    setUploadedFiles(prev => {
-      const updated = [...prev, ...newFiles];
-      onDocumentsChange(updated);
-      return updated;
-    });
-  }, [onDocumentsChange]);
+    // Process each file to get base64 and simulate upload progress
+    for (let i = 0; i < newFiles.length; i++) {
+      const uploadFile = newFiles[i];
+      
+      try {
+        // Read file as base64
+        const base64Data = await fileToBase64(uploadFile.file);
+        
+        // Update the file with base64 data
+        setUploadedFiles(prev => prev.map(f => 
+          f.id === uploadFile.id 
+            ? { ...f, base64: base64Data }
+            : f
+        ));
+
+        // Simulate upload progress
+        const interval = setInterval(() => {
+          setUploadedFiles(prev => {
+            const updated = prev.map(f => 
+              f.id === uploadFile.id 
+                ? { ...f, progress: Math.min(f.progress + Math.random() * 20, 100) }
+                : f
+            );
+            
+            const currentFile = updated.find(f => f.id === uploadFile.id);
+            if (currentFile?.progress === 100) {
+              clearInterval(interval);
+              
+              // Check if this is the last file
+              if (i === newFiles.length - 1) {
+                setIsUploading(false);
+              }
+            }
+            
+            return updated;
+          });
+        }, 200);
+
+      } catch (error) {
+        console.error(`Error reading file ${uploadFile.file.name}:`, error);
+        
+        // Update file with error state (you might want to add an error property to the interface)
+        setUploadedFiles(prev => prev.map(f => 
+          f.id === uploadFile.id 
+            ? { ...f, progress: 100, base64: null }
+            : f
+        ));
+      }
+    }
+  }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -85,17 +139,13 @@ export const DocumentUpload = ({ onDocumentsChange, maxFiles = 10 }: DocumentUpl
   };
 
   const removeFile = (id: string) => {
-    const updated = uploadedFiles.filter(f => f.id !== id);
-    setUploadedFiles(updated);
-    onDocumentsChange(updated);
+    setUploadedFiles(prev => prev.filter(f => f.id !== id));
   };
 
   const updateDocumentType = (id: string, type: DocumentType) => {
-    const updated = uploadedFiles.map(f => 
+    setUploadedFiles(prev => prev.map(f => 
       f.id === id ? { ...f, type } : f
-    );
-    setUploadedFiles(updated);
-    onDocumentsChange(updated);
+    ));
   };
 
   const getDocumentTypeColor = (type: DocumentType) => {

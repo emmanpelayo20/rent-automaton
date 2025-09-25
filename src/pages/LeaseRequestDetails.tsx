@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
 import { WorkflowProgress } from '@/components/workflow/WorkflowProgress';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,8 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Download, FileText, User, MapPin, Calendar, DollarSign, Clock } from 'lucide-react';
 import { format } from 'date-fns';
-import { getRequestById, getPropertyById } from '@/lib/sampleData';
+import { fetchLeaseRequestById, fetchPropertyById, fetchWorkflowStepsByRequestId } from '@/services/leaseRequestService';
+import { LeaseRequest, Property } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 interface LeaseRequestDetailsProps {
@@ -16,10 +18,58 @@ interface LeaseRequestDetailsProps {
 }
 
 export const LeaseRequestDetails = ({ requestId, onBack }: LeaseRequestDetailsProps) => {
-  const request = getRequestById(requestId);
-  const property = request ? getPropertyById(request.propertyId) : null;
+  const [activeTab, setActiveTab] = useState('overview');
+  const [request, setRequest] = useState<LeaseRequest | null>(null);
+  const [property, setProperty] = useState<Property | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!request) {
+  // Fetch lease request from PostgreSQL on component mount
+  useEffect(() => {
+    const loadLeaseRequest = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const fetchedRequest = await fetchLeaseRequestById(requestId);
+        setRequest(fetchedRequest);
+        
+        if (fetchedRequest) {
+           // Fetch workflow steps from PostgreSQL
+          const workflowSteps = await fetchWorkflowStepsByRequestId(requestId);
+          const requestWithWorkflow = { ...fetchedRequest, workflowSteps };
+          setRequest(requestWithWorkflow);
+
+          // Also fetch the property details
+          const fetchedProperty = await fetchPropertyById(fetchedRequest.propertyId);
+          setProperty(fetchedProperty);
+        } else {
+          setError('Lease request not found');
+        }
+      } catch (err) {
+        console.error('Failed to load lease request:', err);
+        setError('Failed to load lease request');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadLeaseRequest();
+  }, [requestId]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="p-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-lg">Loading lease request...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !request) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
@@ -27,7 +77,7 @@ export const LeaseRequestDetails = ({ requestId, onBack }: LeaseRequestDetailsPr
           <Card className="p-12 text-center">
             <h2 className="text-2xl font-bold mb-4">Request Not Found</h2>
             <p className="text-muted-foreground mb-6">
-              The lease request you're looking for doesn't exist.
+              {error || "The lease request you're looking for doesn't exist."}
             </p>
             <Button onClick={onBack}>
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -46,6 +96,28 @@ export const LeaseRequestDetails = ({ requestId, onBack }: LeaseRequestDetailsPr
       minimumFractionDigits: 0,
     }).format(amount);
   };
+
+    // Get the latest workflow status from PostgreSQL workflow steps
+  const getLatestWorkflowStatus = () => {
+    if (!request.workflowSteps || request.workflowSteps.length === 0) {
+      return request.status;
+    }
+    
+    // Sort by completedAt or startedAt desc to get the most recent status
+    const sortedSteps = [...request.workflowSteps].sort((a, b) => {
+      const aTime = a.completedAt || a.startedAt;
+      const bTime = b.completedAt || b.startedAt;
+      if (!aTime && !bTime) return 0;
+      if (!aTime) return 1;
+      if (!bTime) return -1;
+      return new Date(bTime).getTime() - new Date(aTime).getTime();
+    });
+    
+    // Find the latest step with "processing" status, or return the most recent step's status
+    const processingStep = sortedSteps.find(step => step.status === 'processing');
+    return processingStep ? processingStep.name : sortedSteps[0]?.name || request.status;
+  };
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -76,8 +148,8 @@ export const LeaseRequestDetails = ({ requestId, onBack }: LeaseRequestDetailsPr
               <p className="text-muted-foreground">Request ID: {request.id}</p>
             </div>
           </div>
-          <Badge className={cn("text-sm px-4 py-2", getStatusColor(request.status))}>
-            {request.status.replace('_', ' ').toUpperCase()}
+           <Badge className={cn("text-sm px-4 py-2", getStatusColor(getLatestWorkflowStatus()))}>
+            {getLatestWorkflowStatus().replace('_', ' ').toUpperCase()}
           </Badge>
         </div>
 
@@ -100,7 +172,7 @@ export const LeaseRequestDetails = ({ requestId, onBack }: LeaseRequestDetailsPr
                 <Calendar className="h-5 w-5 text-primary" />
                 <div>
                   <p className="text-sm text-muted-foreground">Commencement</p>
-                  <p className="font-medium">{format(request.commencementDate, 'dd MMM yyyy')}</p>
+                  <p className="font-medium">{format(request.commencementDate, 'yyyy-MM-dd')}</p>
                 </div>
               </div>
               
@@ -271,13 +343,6 @@ export const LeaseRequestDetails = ({ requestId, onBack }: LeaseRequestDetailsPr
                     <p className="text-sm text-muted-foreground">Lease Commencement</p>
                     <p className="font-medium">{format(request.commencementDate, 'PPP')}</p>
                   </div>
-                  
-                  <div>
-                    <p className="text-sm text-muted-foreground">Expected Completion</p>
-                    <p className="font-medium">
-                      {format(new Date(request.commencementDate.getTime() + request.leaseTerm * 30 * 24 * 60 * 60 * 1000), 'PPP')}
-                    </p>
-                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -302,8 +367,8 @@ export const LeaseRequestDetails = ({ requestId, onBack }: LeaseRequestDetailsPr
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <span>{(doc.size / 1024 / 1024).toFixed(2)} MB</span>
                             <span>•</span>
-                            <span>{format(doc.uploadedAt, 'dd MMM yyyy, HH:mm')}</span>
-                            <span>•</span>
+                            {/* <span>{format(doc.uploadedAt, 'dd MMM yyyy, HH:mm')}</span>
+                            <span>•</span> */}
                             <Badge variant="secondary" className="text-xs">
                               {doc.type.replace('_', ' ').toUpperCase()}
                             </Badge>

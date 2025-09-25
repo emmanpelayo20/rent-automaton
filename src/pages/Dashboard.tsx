@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
 import { LeaseRequestCard } from '@/components/dashboard/LeaseRequestCard';
 import { Button } from '@/components/ui/button';
@@ -7,8 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, TrendingUp, Clock, CheckCircle, AlertTriangle, Filter } from 'lucide-react';
-import { sampleLeaseRequests } from '@/lib/sampleData';
-import { WorkflowStatus } from '@/lib/types';
+import { fetchAllLeaseRequests } from '@/services/leaseRequestService';
+import { WorkflowStatus, LeaseRequest } from '@/lib/types';
 
 interface DashboardProps {
   onCreateNew: () => void;
@@ -18,8 +18,28 @@ interface DashboardProps {
 export const Dashboard = ({ onCreateNew, onViewRequest }: DashboardProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<WorkflowStatus | 'all'>('all');
+  const [leaseRequests, setLeaseRequests] = useState<LeaseRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredRequests = sampleLeaseRequests.filter(request => {
+  // Fetch lease requests from PostgreSQL on component mount
+  useEffect(() => {
+    const loadLeaseRequests = async () => {
+      try {
+        setIsLoading(true);
+        const requests = await fetchAllLeaseRequests();
+        setLeaseRequests(requests);
+      } catch (error) {
+        console.error('Failed to load lease requests:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadLeaseRequests();
+  }, []);
+
+
+  const filteredRequests = leaseRequests.filter(request => {
     const matchesSearch = request.tenantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          request.propertyAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          request.id.toLowerCase().includes(searchTerm.toLowerCase());
@@ -30,21 +50,35 @@ export const Dashboard = ({ onCreateNew, onViewRequest }: DashboardProps) => {
   });
 
   const stats = {
-    total: sampleLeaseRequests.length,
-    completed: sampleLeaseRequests.filter(r => r.status === 'completed').length,
-    pending: sampleLeaseRequests.filter(r => r.status === 'pending_review').length,
-    processing: sampleLeaseRequests.filter(r => 
+    total: leaseRequests.length,
+    completed: leaseRequests.filter(r => r.status === 'completed').length,
+    pending: leaseRequests.filter(r => r.status === 'pending_review').length,
+    processing: leaseRequests.filter(r => 
       !['completed', 'failed', 'pending_review'].includes(r.status)
     ).length,
   };
 
   const getStatusOptions = () => {
-    const statuses = Array.from(new Set(sampleLeaseRequests.map(r => r.status)));
+    const statuses = Array.from(new Set(leaseRequests.map(r => r.status)));
     return statuses.map(status => ({
       value: status,
       label: status.replace('_', ' ').toUpperCase()
     }));
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="p-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-lg">Loading lease requests...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -88,7 +122,7 @@ export const Dashboard = ({ onCreateNew, onViewRequest }: DashboardProps) => {
             <CardContent>
               <div className="text-2xl font-bold text-success">{stats.completed}</div>
               <p className="text-xs text-muted-foreground">
-                {Math.round((stats.completed / stats.total) * 100)}% success rate
+                {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}% success rate
               </p>
             </CardContent>
           </Card>
